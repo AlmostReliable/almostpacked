@@ -30,7 +30,7 @@ chmod +x .git/hooks/post-merge
 echo "Setting up pre-push hook"
 echo "#!/bin/sh" > .git/hooks/pre-push
 echo "cd $DIR" >> .git/hooks/pre-push
-echo "java -jar AlmostPacked.jar -c" >> .git/hooks/pre-push
+echo "java -jar AlmostPacked.jar -p" >> .git/hooks/pre-push
 chmod +x .git/hooks/pre-push
 
 echo "Done setting up hooks"
