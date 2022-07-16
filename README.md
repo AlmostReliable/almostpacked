@@ -28,7 +28,7 @@ check out the [wiki].
 The tool is inspired by [InstanceSync] from [Vazkii].<br>
 Credits for the download logic have been noted in the relevant sections.
 
-Notable differences can be found on the [wiki].
+Notable differences can be found on the [wiki][notable changes].
 
 
 ## **⏰ Changelog**
@@ -62,5 +62,6 @@ modpack page.
 [curseforge]: https://download.curseforge.com/
 [instancesync]: https://github.com/Vazkii/InstanceSync
 [vazkii]: https://github.com/Vazkii
+[notable changes]: https://github.com/AlmostReliable/almostpacked/wiki/Explanation#instancesync-vs-almostpacked
 [changelog]: CHANGELOG.md
 [license]: LICENSE
