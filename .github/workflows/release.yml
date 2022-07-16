@@ -1,0 +1,69 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  JAVA_DIST: 'zulu'
+  JAVA_VERSION: 17
+  ARTIFACT_ID: 'almostpacked'
+  FILE_NAME: 'AlmostPacked'
+  RELEASE_FILES: 'LICENSE changes.md scripts'
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone Repository
+        uses: actions/checkout@v3
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: ${{ env.JAVA_DIST }}
+          cache: maven
+
+      - name: Package
+        run: mvn -B -U clean package
+
+      - name: Collect version information
+        run: |
+          shopt -s failglob # print a warning if a glob does not match anything
+          set_var() {
+            echo $1="$2"
+            echo $1="$2" >> $GITHUB_ENV
+            declare -g $1="$2"
+          }
+          set_var JAR_FILE $(eval echo target/${{ env.ARTIFACT_ID }}-*-jar-with-dependencies.jar)
+          set_var VERSION $(echo ${JAR_FILE%.*} | cut -d- -f2)
+          set_var RELEASE_TYPE "$(echo ${GITHUB_REF##*/} | cut -s -d- -f2)"
+          set_var PRE_RELEASE "$([[ -z $RELEASE_TYPE ]] && echo false || echo true)"
+          set_var RELEASE_TYPE "$([[ -n $RELEASE_TYPE ]] && echo -$RELEASE_TYPE)"
+
+      - name: Install changelog parser
+        uses: taiki-e/install-action@parse-changelog
+
+      - name: Parse changelog
+        run: parse-changelog CHANGELOG.md ${{ env.VERSION }} > changes.md
+
+      - name: Bundle Release
+        run: |
+          mv ${{ env.JAR_FILE }} ${{ env.FILE_NAME }}.jar
+          tar -czvf ${{ env.FILE_NAME }}-${{ env.VERSION }}${{ env.RELEASE_TYPE }}.tar.gz $RELEASE_FILES ${{ env.FILE_NAME }}.jar
+          zip -r ${{ env.FILE_NAME }}-${{ env.VERSION }}${{ env.RELEASE_TYPE }}.zip $RELEASE_FILES ${{ env.FILE_NAME }}.jar
+
+      - name: Upload to GitHub
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          body_path: changes.md
+          files: |
+            ${{ env.FILE_NAME }}-${{ env.VERSION }}${{ env.RELEASE_TYPE }}.tar.gz
+            ${{ env.FILE_NAME }}-${{ env.VERSION }}${{ env.RELEASE_TYPE }}.zip
+          prerelease: ${{ env.PRE_RELEASE }}

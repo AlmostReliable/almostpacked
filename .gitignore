@@ -1,0 +1,18 @@
+### Java
+**/META-INF/
+*.jar
+*.class
+*.log
+
+### Maven
+target/
+
+### IntelliJ
+.idea/
+out/
+*.iml
+
+### Project
+test/
+mods/
+**/minecraftinstance.json
