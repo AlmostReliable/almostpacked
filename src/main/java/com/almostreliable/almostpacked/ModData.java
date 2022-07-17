@@ -10,8 +10,10 @@ class ModData {
     }
 
     @Override
-    public boolean equals(Object obj) {
-        return obj instanceof ModData o && installedFile.equals(o.installedFile);
+    public boolean equals(Object o) {
+        return o instanceof ModData modData &&
+            modData.installedFile != null &&
+            modData.installedFile.equals(installedFile);
     }
 
     @Override
@@ -32,24 +34,25 @@ class ModData {
         public int hashCode() {
             var result = id;
             result = 31 * result + downloadUrl.hashCode();
-            result = 31 * result + getFileName().hashCode();
+            result = 31 * result + fileName.hashCode();
             result = 31 * result + projectId;
+            result = 31 * result + FileNameOnDisk.hashCode();
             return result;
         }
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            var addonFile = (AddonFile) o;
-            return id == addonFile.id && projectId == addonFile.projectId &&
+            return this == o || o instanceof AddonFile addonFile &&
+                id == addonFile.id &&
                 downloadUrl.equals(addonFile.downloadUrl) &&
-                getFileName().equals(addonFile.getFileName());
+                fileName.equals(addonFile.fileName) &&
+                projectId == addonFile.projectId &&
+                FileNameOnDisk.equals(addonFile.FileNameOnDisk);
         }
 
         @Override
         public String toString() {
-            return getFileName();
+            return projectId + " | " + FileNameOnDisk;
         }
 
         String getDownloadUrl() {
@@ -57,11 +60,19 @@ class ModData {
         }
 
         String getFileName() {
-            return fileName != null ? fileName : FileNameOnDisk;
+            return fileName;
+        }
+
+        String getFileNameOnDisk() {
+            return FileNameOnDisk;
         }
 
         int getProjectId() {
             return projectId;
+        }
+
+        boolean isDisabled() {
+            return FileNameOnDisk.endsWith(".disabled");
         }
     }
 }

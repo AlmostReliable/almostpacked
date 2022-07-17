@@ -1,5 +1,6 @@
 package com.almostreliable.almostpacked;
 
+import com.almostreliable.almostpacked.ModData.AddonFile;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 
@@ -20,7 +21,7 @@ class PackValidator {
     private final FileProcessor fileProcessor;
     private final File modDir;
     private final Config config;
-    private final List<String> fileNames;
+    private final List<String> removalFilter;
     private ExecutorService executor;
     private int downloadCount;
     private ModData[] toValidate;
@@ -29,7 +30,7 @@ class PackValidator {
         this.fileProcessor = fileProcessor;
         modDir = fileProcessor.getModDir();
         config = fileProcessor.getConfig();
-        fileNames = new LinkedList<>();
+        removalFilter = new LinkedList<>();
     }
 
     void handleSyncing() throws IOException {
@@ -58,14 +59,14 @@ class PackValidator {
         }
 
         if (AlmostPacked.isMerging()) {
-            System.out.println("Changes in the repository detected! Updating instance...");
+            System.out.println("Changes in the sync file detected! Updating instance...");
             fileProcessor.overwriteInstance();
             toValidate = syncedModData;
             return;
         }
 
         if (AlmostPacked.isPushing()) {
-            System.out.println("Changes in the instance detected! Updating repository sync file...");
+            System.out.println("Changes in the instance detected! Updating sync file...");
 
             printDevLog(installedMods.size() + " mods found inside 'minecraftinstance.json':");
             var installedContainer = createContainer(installedMods, installedModData);
@@ -85,12 +86,7 @@ class PackValidator {
 
             printDevLog("\n");
             printDevLog(syncedContainer.size() + " mods after syncing:");
-            syncedContainer.forEach((projectId, mod) ->
-                printDevLog(
-                    "\t - " + mod.modData().installedFile.getProjectId() + " | " +
-                        mod.modData().installedFile.getFileName()
-                )
-            );
+            syncedContainer.forEach((projectId, mod) -> printDevLog("\t - " + mod.modData()));
 
             var syncArray = new JsonArray();
             syncedContainer.values().forEach(mod -> syncArray.add(mod.json));
@@ -115,10 +111,7 @@ class PackValidator {
         for (var i = 0; i < mods.size(); i++) {
             var modDataContainer = new ModDataContainer(mods.get(i), modData[i]);
             container.put(modDataContainer.modData().installedFile.getProjectId(), modDataContainer);
-            printDevLog(
-                "\t - " + modDataContainer.modData().installedFile.getProjectId() + " | " +
-                    modDataContainer.modData().installedFile.getFileName()
-            );
+            printDevLog("\t - " + modDataContainer.modData());
         }
         return container;
     }
@@ -128,35 +121,71 @@ class PackValidator {
         executor = Executors.newFixedThreadPool(config.concurrentDownloads);
         var startTime = System.currentTimeMillis();
 
+        Set<AddonFile> toDownload = new HashSet<>();
+        Set<File> toEnable = new HashSet<>();
+        Set<File> toDisable = new HashSet<>();
         for (var data : toValidate) {
-            var file = data.installedFile;
-            if (file == null) continue;
+            var modFile = data.installedFile;
+            if (modFile == null) continue;
 
-            var fileName = file.getFileName();
-            fileNames.add(fileName);
+            var fileName = modFile.getFileNameOnDisk();
+            var file = new File(modDir, fileName);
 
-            var modFile = new File(modDir, fileName);
-            if (!modExists(modFile)) {
-                download(modFile, file.getDownloadUrl());
+            if (file.exists()) {
+                removalFilter.add(fileName);
+                continue;
             }
+
+            if (modFile.isDisabled()) {
+                var enabledFile = new File(modDir, modFile.getFileName());
+                toDisable.add(enabledFile);
+                if (enabledFile.exists()) continue;
+            } else {
+                var disabledFile = new File(modDir, modFile.getFileName() + ".disabled");
+                if (disabledFile.exists()) {
+                    toEnable.add(disabledFile);
+                    continue;
+                }
+            }
+            toDownload.add(modFile);
         }
 
-        if (downloadCount == 0) {
-            System.out.println("No mods needed to be downloaded!");
-            return;
-        }
+        toDownload.forEach(mod -> download(new File(modDir, mod.getFileName()), mod.getDownloadUrl()));
 
         try {
             executor.shutdown();
             // noinspection ResultOfMethodCallIgnored
             executor.awaitTermination(1, TimeUnit.DAYS);
-
-            var elapsedTime = (System.currentTimeMillis() - startTime) / 1_000F;
-            System.out.printf("Downloaded %d mods! Duration: %.2fs%n", downloadCount, elapsedTime);
         } catch (InterruptedException e) {
             System.out.println("Downloads were interrupted!");
             e.printStackTrace();
         }
+
+        if (downloadCount == 0) {
+            System.out.println("No mods needed to be downloaded!");
+        } else {
+            var elapsedTime = (System.currentTimeMillis() - startTime) / 1_000F;
+            System.out.printf("Downloaded %d mods! Duration: %.2fs%n", downloadCount, elapsedTime);
+        }
+
+        toEnable.forEach(modFile -> {
+            var enabled = new File(modDir, modFile.getName().replace(".disabled", ""));
+            if (modFile.renameTo(enabled)) {
+                System.out.println("Enabled " + enabled.getName());
+            } else {
+                System.out.println("Failed to enable " + enabled.getName());
+            }
+            removalFilter.add(enabled.getName());
+        });
+        toDisable.forEach(modFile -> {
+            var disabled = new File(modDir, modFile.getName() + ".disabled");
+            if (modFile.renameTo(disabled)) {
+                System.out.println("Disabled " + modFile.getName());
+            } else {
+                System.out.println("Failed to disable " + modFile.getName());
+            }
+            removalFilter.add(disabled.getName());
+        });
     }
 
     private void download(File modFile, String downloadUrl) {
@@ -189,12 +218,13 @@ class PackValidator {
             }
         };
 
+        removalFilter.add(modFile.getName());
         downloadCount++;
         executor.submit(downloadTask);
     }
 
     private void deleteRemovedMods() {
-        var toRemove = modDir.listFiles(f -> !f.isDirectory() && !fileNames.contains(f.getName()));
+        var toRemove = modDir.listFiles(f -> !f.isDirectory() && !removalFilter.contains(f.getName()));
         if (toRemove == null || toRemove.length == 0) {
             System.out.println("No mods needed to be removed!");
             return;
@@ -213,28 +243,6 @@ class PackValidator {
         }
 
         System.out.println("Deleted " + removed + " old mods!");
-    }
-
-    private boolean modExists(File file) {
-        if (file.exists()) return true;
-
-        var name = file.getName();
-        if (name.endsWith(".disabled")) {
-            return swapIfExists(file, name.replace(".disabled", ""));
-        }
-        return swapIfExists(file, name + ".disabled");
-    }
-
-    private boolean swapIfExists(File target, String searchName) {
-        var search = new File(modDir, searchName);
-        if (search.exists()) {
-            System.out.println("Found alt file for " + target.getName() + ": " + searchName + "! Switching filename...");
-            if (search.renameTo(target)) {
-                System.out.println("Switched filename!");
-                return true;
-            }
-        }
-        return false;
     }
 
     private void printDevLog(String message) {
