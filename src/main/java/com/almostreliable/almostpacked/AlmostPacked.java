@@ -14,6 +14,7 @@ public final class AlmostPacked {
     private static final String VERSION = AlmostPacked.class.getPackage().getImplementationVersion();
     @SuppressWarnings({"NonConstantFieldWithUpperCaseName", "RedundantFieldInitialization"})
     private static String FLAG = null;
+    private static boolean SHOULD_FAIL = false;
 
     private AlmostPacked() {}
 
@@ -35,8 +36,8 @@ public final class AlmostPacked {
         FLAG = args[0];
         var startTime = System.currentTimeMillis();
 
+        var fileProcessor = new FileProcessor();
         try {
-            var fileProcessor = new FileProcessor();
             fileProcessor.readConfig();
 
             printHeader("Processing...");
@@ -54,7 +55,12 @@ public final class AlmostPacked {
         }
 
         var elapsedTime = (System.currentTimeMillis() - startTime) / 1_000F;
-        printHeader("Done! " + String.format("Duration: %.2fs%n", elapsedTime));
+        printHeader("Done! " + String.format("Duration: %.2fs", elapsedTime));
+
+        if (fileProcessor.getConfig().failOnChange && SHOULD_FAIL) {
+            printHeader("Hook failed because the sync file was changed!\nReview the changes.");
+            System.exit(1);
+        }
     }
 
     static void abort(String message) {
@@ -65,6 +71,10 @@ public final class AlmostPacked {
     static void printHeader(String message) {
         System.out.println("\n\n############################################");
         System.out.println(message + "\n");
+    }
+
+    static void shouldFail() {
+        SHOULD_FAIL = true;
     }
 
     static boolean isMerging() {

@@ -5,5 +5,6 @@ class Config {
     boolean subFolder;
     boolean prettyJson;
     int concurrentDownloads;
+    boolean failOnChange;
     boolean devMode;
 }

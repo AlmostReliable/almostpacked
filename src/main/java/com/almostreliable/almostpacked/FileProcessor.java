@@ -123,6 +123,7 @@ class FileProcessor {
 
     void overwriteSync(JsonArray content) throws IOException {
         writeFile(syncFile, sortMods(content), config.prettyJson);
+        AlmostPacked.shouldFail();
     }
 
     private JsonArray sortMods(JsonArray mods) {
