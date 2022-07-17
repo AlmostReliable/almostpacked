@@ -5,7 +5,9 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import java.io.*;
+import java.text.SimpleDateFormat;
 import java.util.Comparator;
+import java.util.Locale;
 import java.util.stream.StreamSupport;
 
 class FileProcessor {
@@ -45,6 +47,7 @@ class FileProcessor {
                 "subFolder": %s,
                 "prettyJson": true,
                 "concurrentDownloads": 10,
+                "failOnChange": true,
                 "devMode": false
             }
             """.formatted(subFolder)
@@ -110,6 +113,10 @@ class FileProcessor {
     }
 
     void overwriteInstance() throws IOException {
+        var sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSSSXXX", Locale.getDefault());
+        var time = sdf.format(System.currentTimeMillis());
+        mcInstance.addProperty("lastPreviousMatchUpdate", time);
+        mcInstance.addProperty("lastRefreshAttempt", time);
         mcInstance.add("installedAddons", syncedMods);
         writeFile(mcInstanceFile, mcInstance, false);
     }
